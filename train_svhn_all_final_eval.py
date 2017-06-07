@@ -87,6 +87,7 @@ def run(result_dir, test_phase, n_labeled, n_extra_unlabeled, data_seed, model_t
                 data_seed=data_seed,
                 test_phase=test_phase)
 
+    model['rampdown_length'] = 0
     model['ema_consistency'] = hyperparams['ema_consistency']
     model['max_consistency_coefficient'] = hyperparams['max_consistency_coefficient']
     model['apply_consistency_to_labeled'] = hyperparams['apply_consistency_to_labeled']
