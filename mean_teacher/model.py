@@ -158,6 +158,13 @@ class Model:
             self.metric_values, self.metric_update_ops = metrics.aggregate_metric_map({
                 "eval/error/1": streaming_mean(self.errors_1),
                 "eval/error/ema": streaming_mean(self.errors_ema),
+
+                # Note that the evaluation costs are not directly comparable
+                # to the training costs. Training batches contain unlabeled
+                # samples but the evaluation batches do not. Because
+                # classification cost is zero for unlabeled samples, the
+                # training costs are smaller than evaluation costs when
+                # doing semi-supervised learning.
                 "eval/class_cost/1": streaming_mean(self.class_costs_1),
                 "eval/class_cost/ema": streaming_mean(self.class_costs_ema),
                 "eval/cons_cost/pi": streaming_mean(self.cons_costs_pi),
