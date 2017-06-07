@@ -27,6 +27,9 @@ def run():
     )
 
     model = Model(result_dir=result_dir)
+    model['rampdown_length'] = 0
+    model['training_length'] = 180000
+
     tensorboard_dir = model.save_tensorboard_graph()
     LOG.info("Saved tensorboard graph to %r", tensorboard_dir)
 
