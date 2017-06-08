@@ -11,21 +11,19 @@ For a longer description, see the papers below. They are currently slighty out-o
 
 ## Usage
 
-The code runs on Python 3. Install the dependencies and download the SVHN dataset with the commands below:
+The code runs on Python 3. Install the dependencies and prepare the datasets with the following commands:
 
 ```
 pip install tensorflow numpy scipy
 ./download_svhn.py
 ```
 
-To train the model run
+To train the model, run:
 
-```
-python train_svhn.py
-```
+* `python train_svhn.py` to train on SVHN using 500 labels
+* `python train_cifar10.py` to train on CIFAR-10 using 4000 labels
 
-To reproduce the results of the poster above, run
+To reproduce the results of the poster above, run:
 
-```
-python train_svhn_all_final_eval.py
-```
+* `python train_svhn_final_eval.py` to reproduce the SVHN results
+* `python train_cifar10_final_eval.py` to reproduce the CIFAR-10 results
