@@ -10,7 +10,7 @@ This is the source code for the ICLR 2017 workshop paper "Mean teachers are bett
 The code runs on Python 3. Install the dependencies and prepare the datasets with the following commands:
 
 ```
-pip install tensorflow numpy scipy
+pip install tensorflow==1.2.1 numpy scipy
 ./download_svhn.py
 ```
 
