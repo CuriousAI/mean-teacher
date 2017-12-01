@@ -27,15 +27,15 @@ Mean Teacher works well with modern architectures. Combining Mean Teacher with R
 
 ImageNet using 10% of the labels | top-5 validation error
 ---------------------------------|------------------------
-Variational Auto-Encoder [paper](https://arxiv.org/abs/1609.08976)      | 35.42 ± 0.90
+Variational Auto-Encoder \[[paper](https://arxiv.org/abs/1609.08976)\]      | 35.42 ± 0.90
 **Mean Teacher ResNet-152**      |  **9.11 ± 0.12**
-All labels, state of the art [paper](https://arxiv.org/pdf/1709.01507.pdf)    |  3.79
+All labels, state of the art \[[paper](https://arxiv.org/pdf/1709.01507.pdf)\]    |  3.79
 
 CIFAR-10 using 4000 labels   | test error
 -----------------------------|-----------
-CT-GAN [paper](https://openreview.net/forum?id=SJx9GQb0-)                      | 9.98 ± 0.21
+CT-GAN \[[paper](https://openreview.net/forum?id=SJx9GQb0-)\]                      | 9.98 ± 0.21
 **Mean Teacher ResNet-26**	 | **6.28 ± 0.15**
-All labels, state of the art [paper](https://arxiv.org/abs/1705.07485) | 2.86
+All labels, state of the art \[[paper](https://arxiv.org/abs/1705.07485)\] | 2.86
 
 
 ## Implementation
