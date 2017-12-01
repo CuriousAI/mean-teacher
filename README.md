@@ -23,7 +23,7 @@ Our contribution is the last step. [Previous models](https://arxiv.org/abs/1610.
 
 ![Mean Teacher model](mean_teacher.png)
 
-Mean Teacher is easy to add to an existing supervised method, and works well with modern architectures. Combining Mean Teacher with ResNets, we improved the state of the art on semi-supervised ImageNet and CIFAR-10 datasets.
+Mean Teacher works well with modern architectures. Combining Mean Teacher with ResNets, we improved the state of the art in semi-supervised learning on the ImageNet and CIFAR-10 datasets.
 
 ImageNet using 10% of the labels | top-5 validation error
 ---------------------------------|------------------------
