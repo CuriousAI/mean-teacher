@@ -10,7 +10,7 @@ Mean Teacher is a simple method for semi-supervised learning. It consists of the
 
 1. Take a supervised architecture and make a copy of it. Let's call the original model the **student** and the new one the **teacher**.
 2. At each training step, use the same minibatch as inputs to both the student and the teacher but add random augmentation or noise to the inputs separately.
-3. Add an additional *consistency cost* between the student and teacher output (after softmax).
+3. Add an additional *consistency cost* between the student and teacher outputs (after softmax).
 4. Let the optimizer update the student weights normally.
 5. Let the teacher weights be an exponential moving average (EMA) of the student weights. That is, after each training step, update the teacher weights a little bit toward the student weights.
 
