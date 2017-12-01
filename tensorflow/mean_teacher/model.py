@@ -11,6 +11,7 @@ from tensorflow.contrib.metrics import streaming_mean
 from . import nn
 from . import weight_norm as wn
 from .framework import ema_variable_scope, name_variable_scope, assert_shape, HyperparamVariables
+from . import string_utils
 
 
 LOG = logging.getLogger('main')
@@ -21,9 +22,12 @@ class Model:
         # Consistency hyperparameters
         'ema_consistency': True,
         'apply_consistency_to_labeled': True,
-        'max_consistency_coefficient': 100.0,
+        'max_consistency_cost': 100.0,
         'ema_decay_during_rampup': 0.99,
         'ema_decay_after_rampup': 0.999,
+        'consistency_trust': 0.0,
+        'num_logits': 1, # Either 1 or 2
+        'logit_distance_cost': 0.0, # Matters only with 2 outputs
 
         # Optimizer hyperparameters
         'max_learning_rate': 0.003,
@@ -33,6 +37,11 @@ class Model:
         'adam_beta_2_after_rampup': 0.999,
         'adam_epsilon': 1e-8,
 
+        # Architecture hyperparameters
+        'input_noise': 0.15,
+        'student_dropout_probability': 0.5,
+        'teacher_dropout_probability': 0.5,
+
         # Training schedule
         'rampup_length': 40000,
         'rampdown_length': 25000,
@@ -40,6 +49,7 @@ class Model:
 
         # Input augmentation
         'flip_horizontally': False,
+        'translate': True,
 
         # Whether to scale each input image to mean=0 and std=1 per channel
         # Use False if input is already normalized in some other way
@@ -51,11 +61,12 @@ class Model:
     }
 
     #pylint: disable=too-many-instance-attributes
-    def __init__(self, result_dir):
-        self.checkpoint_dir = os.path.join(result_dir, 'checkpoints')
-        self.summary_dir = os.path.join(result_dir, 'summaries')
-        os.makedirs(self.checkpoint_dir)
-        os.makedirs(self.summary_dir)
+    def __init__(self, run_context=None):
+        if run_context is not None:
+            self.training_log = run_context.create_train_log('training')
+            self.validation_log = run_context.create_train_log('validation')
+            self.checkpoint_path = os.path.join(run_context.transient_dir, 'checkpoint')
+            self.tensorboard_path = os.path.join(run_context.result_dir, 'tensorboard')
 
         with tf.name_scope("placeholders"):
             self.images = tf.placeholder(dtype=tf.float32, shape=(None, 32, 32, 3), name='images')
@@ -80,7 +91,7 @@ class Model:
                                       (1 - sigmoid_rampdown_value) * self.hyper['adam_beta_1_after_rampdown'],
                                       name='adam_beta_1')
             self.cons_coefficient = tf.multiply(sigmoid_rampup_value,
-                                                self.hyper['max_consistency_coefficient'],
+                                                self.hyper['max_consistency_cost'],
                                                 name='consistency_coefficient')
 
             step_rampup_value = step_rampup(self.global_step, self.hyper['rampup_length'])
@@ -91,33 +102,54 @@ class Model:
                                     step_rampup_value * self.hyper['ema_decay_after_rampup'],
                                     name='ema_decay')
 
-        self.logits_1, self.logits_2, self.logits_ema = inference(
+        (
+            (self.class_logits_1, self.cons_logits_1),
+            (self.class_logits_2, self.cons_logits_2),
+            (self.class_logits_ema, self.cons_logits_ema)
+        ) = inference(
             self.images,
             is_training=self.is_training,
             ema_decay=self.ema_decay,
+            input_noise=self.hyper['input_noise'],
+            student_dropout_probability=self.hyper['student_dropout_probability'],
+            teacher_dropout_probability=self.hyper['teacher_dropout_probability'],
             normalize_input=self.hyper['normalize_input'],
-            flip_horizontally=self.hyper['flip_horizontally'])
+            flip_horizontally=self.hyper['flip_horizontally'],
+            translate=self.hyper['translate'],
+            num_logits=self.hyper['num_logits'])
 
         with tf.name_scope("objectives"):
-            self.mean_error_1, self.errors_1 = errors(self.logits_1, self.labels)
-            self.mean_error_ema, self.errors_ema = errors(self.logits_ema, self.labels)
+            self.mean_error_1, self.errors_1 = errors(self.class_logits_1, self.labels)
+            self.mean_error_ema, self.errors_ema = errors(self.class_logits_ema, self.labels)
 
             self.mean_class_cost_1, self.class_costs_1 = classification_costs(
-                self.logits_1, self.labels)
+                self.class_logits_1, self.labels)
             self.mean_class_cost_ema, self.class_costs_ema = classification_costs(
-                self.logits_ema, self.labels)
+                self.class_logits_ema, self.labels)
 
             labeled_consistency = self.hyper['apply_consistency_to_labeled']
             consistency_mask = tf.logical_or(tf.equal(self.labels, -1), labeled_consistency)
             self.mean_cons_cost_pi, self.cons_costs_pi = consistency_costs(
-                self.logits_1, self.logits_2, self.cons_coefficient, consistency_mask)
+                self.cons_logits_1, self.class_logits_2, self.cons_coefficient, consistency_mask, self.hyper['consistency_trust'])
             self.mean_cons_cost_mt, self.cons_costs_mt = consistency_costs(
-                self.logits_1, self.logits_ema, self.cons_coefficient, consistency_mask)
+                self.cons_logits_1, self.class_logits_ema, self.cons_coefficient, consistency_mask, self.hyper['consistency_trust'])
+
+            def l2_norms(matrix):
+                l2s = tf.reduce_sum(matrix ** 2, axis=1)
+                mean_l2 = tf.reduce_mean(l2s)
+                return mean_l2, l2s
+
+            self.mean_res_l2_1, self.res_l2s_1 = l2_norms(self.class_logits_1 - self.cons_logits_1)
+            self.mean_res_l2_ema, self.res_l2s_ema = l2_norms(self.class_logits_ema - self.cons_logits_ema)
+            self.res_costs_1 = self.hyper['logit_distance_cost'] * self.res_l2s_1
+            self.mean_res_cost_1 = tf.reduce_mean(self.res_costs_1)
+            self.res_costs_ema = self.hyper['logit_distance_cost'] * self.res_l2s_ema
+            self.mean_res_cost_ema = tf.reduce_mean(self.res_costs_ema)
 
             self.mean_total_cost_pi, self.total_costs_pi = total_costs(
-                self.class_costs_1, self.cons_costs_pi)
+                self.class_costs_1, self.cons_costs_pi, self.res_costs_1)
             self.mean_total_cost_mt, self.total_costs_mt = total_costs(
-                self.class_costs_1, self.cons_costs_mt)
+                self.class_costs_1, self.cons_costs_mt, self.res_costs_1)
 
             self.cost_to_be_minimized = tf.cond(self.hyper['ema_consistency'],
                                                 lambda: self.mean_total_cost_mt,
@@ -150,6 +182,8 @@ class Model:
             "train/class_cost/ema": self.mean_class_cost_ema,
             "train/cons_cost/pi": self.mean_cons_cost_pi,
             "train/cons_cost/mt": self.mean_cons_cost_mt,
+            "train/res_cost/1": self.mean_res_cost_1,
+            "train/res_cost/ema": self.mean_res_cost_ema,
             "train/total_cost/pi": self.mean_total_cost_pi,
             "train/total_cost/mt": self.mean_total_cost_mt,
         }
@@ -158,22 +192,19 @@ class Model:
             self.metric_values, self.metric_update_ops = metrics.aggregate_metric_map({
                 "eval/error/1": streaming_mean(self.errors_1),
                 "eval/error/ema": streaming_mean(self.errors_ema),
-
-                # Note that the evaluation costs are not directly comparable
-                # to the training costs. Training batches contain unlabeled
-                # samples but the evaluation batches do not. Because
-                # classification cost is zero for unlabeled samples, the
-                # training costs are smaller than evaluation costs when
-                # doing semi-supervised learning.
                 "eval/class_cost/1": streaming_mean(self.class_costs_1),
                 "eval/class_cost/ema": streaming_mean(self.class_costs_ema),
-                "eval/cons_cost/pi": streaming_mean(self.cons_costs_pi),
-                "eval/cons_cost/mt": streaming_mean(self.cons_costs_mt),
-                "eval/total_cost/pi": streaming_mean(self.total_costs_pi),
-                "eval/total_cost/mt": streaming_mean(self.total_costs_mt)
+                "eval/res_cost/1": streaming_mean(self.res_costs_1),
+                "eval/res_cost/ema": streaming_mean(self.res_costs_ema),
             })
             metric_variables = slim.get_local_variables(scope=metrics_scope.name)
             self.metric_init_op = tf.variables_initializer(metric_variables)
+
+        self.result_formatter = string_utils.DictFormatter(
+            order=["eval/error/ema", "error/1", "class_cost/1", "cons_cost/mt"],
+            default_format='{name}: {value:>10.6f}',
+            separator=",  ")
+        self.result_formatter.add_format('error', '{name}: {value:>6.1%}')
 
         with tf.name_scope("initializers"):
             init_init_variables = tf.get_collection("init_in_init")
@@ -202,8 +233,9 @@ class Model:
             results, _ = self.run([self.training_metrics, self.train_step_op],
                                   self.feed_dict(batch))
             step_control = self.get_training_control()
+            self.training_log.record(step_control['step'], {**results, **step_control})
             if step_control['time_to_print']:
-                LOG.info("step %d: %r", step_control['step'], {**results, **step_control})
+                LOG.info("step %5d:   %s", step_control['step'], self.result_formatter.format_dict(results))
             if step_control['time_to_stop']:
                 break
             if step_control['time_to_evaluate']:
@@ -219,7 +251,8 @@ class Model:
                      feed_dict=self.feed_dict(batch, is_training=False))
         step = self.run(self.global_step)
         results = self.run(self.metric_values)
-        LOG.info("step %d validation: %r", step, {**results, 'step': step})
+        self.validation_log.record(step, results)
+        LOG.info("step %5d:   %s", step, self.result_formatter.format_dict(results))
 
     def get_training_control(self):
         return self.session.run(self.training_control)
@@ -235,12 +268,11 @@ class Model:
         }
 
     def save_checkpoint(self):
-        checkpoint_prefix = os.path.join(self.checkpoint_dir, "checkpoint")
-        path = self.saver.save(self.session, checkpoint_prefix, global_step=self.global_step)
+        path = self.saver.save(self.session, self.checkpoint_path, global_step=self.global_step)
         LOG.info("Saved checkpoint: %r", path)
 
     def save_tensorboard_graph(self):
-        writer = tf.summary.FileWriter(self.summary_dir)
+        writer = tf.summary.FileWriter(self.tensorboard_path)
         writer.add_graph(self.session.graph)
         return writer.get_logdir()
 
@@ -290,37 +322,36 @@ def sigmoid_rampdown(global_step, rampdown_length, training_length):
     return tf.identity(result, name="sigmoid_rampdown")
 
 
-def inference(inputs, is_training, ema_decay, normalize_input, flip_horizontally):
+def inference(inputs, is_training, ema_decay, input_noise, student_dropout_probability, teacher_dropout_probability,
+              normalize_input, flip_horizontally, translate, num_logits):
+    tower_args = dict(inputs=inputs,
+                      is_training=is_training,
+                      input_noise=input_noise,
+                      normalize_input=normalize_input,
+                      flip_horizontally=flip_horizontally,
+                      translate=translate,
+                      num_logits=num_logits)
+
     with tf.variable_scope("initialization") as var_scope:
-        _ = tower(inputs,
-                  is_training,
-                  normalize_input=normalize_input,
-                  flip_horizontally=flip_horizontally,
-                  is_initialization=True)
+        _ = tower(**tower_args, dropout_probability=student_dropout_probability, is_initialization=True)
     with name_variable_scope("primary", var_scope, reuse=True) as (name_scope, _):
-        output1 = tower(inputs,
-                        is_training,
-                        normalize_input=normalize_input,
-                        flip_horizontally=flip_horizontally,
-                        name=name_scope)
+        class_logits_1, cons_logits_1 = tower(**tower_args, dropout_probability=student_dropout_probability, name=name_scope)
     with name_variable_scope("secondary", var_scope, reuse=True) as (name_scope, _):
-        output2 = tower(inputs,
-                        is_training,
-                        normalize_input=normalize_input,
-                        flip_horizontally=flip_horizontally,
-                        name=name_scope)
+        class_logits_2, cons_logits_2 = tower(**tower_args, dropout_probability=teacher_dropout_probability, name=name_scope)
     with ema_variable_scope("ema", var_scope, decay=ema_decay):
-        ema_output = tower(inputs,
-                           is_training,
-                           normalize_input=normalize_input,
-                           flip_horizontally=flip_horizontally)
-    return output1, output2, tf.stop_gradient(ema_output)
+        class_logits_ema, cons_logits_ema = tower(**tower_args, dropout_probability=teacher_dropout_probability, name=name_scope)
+        class_logits_ema, cons_logits_ema = tf.stop_gradient(class_logits_ema), tf.stop_gradient(cons_logits_ema)
+    return (class_logits_1, cons_logits_1), (class_logits_2, cons_logits_2), (class_logits_ema, cons_logits_ema)
 
 
 def tower(inputs,
           is_training,
+          dropout_probability,
+          input_noise,
           normalize_input,
           flip_horizontally,
+          translate,
+          num_logits,
           is_initialization=False,
           name=None):
     with tf.name_scope(name, "tower"):
@@ -357,21 +388,23 @@ def tower(inputs,
                                    horizontally=flip_horizontally,
                                    vertically=False,
                                    name='random_flip')
-            net = nn.random_translate(net, scale=2, name='random_translate')
-            net = nn.gaussian_noise(net, scale=0.15, name='gaussian_noise')
+            net = tf.cond(translate,
+                          lambda: nn.random_translate(net, scale=2, name='random_translate'),
+                          lambda: net)
+            net = nn.gaussian_noise(net, scale=input_noise, name='gaussian_noise')
 
             net = wn.conv2d(net, 128, scope="conv_1_1")
             net = wn.conv2d(net, 128, scope="conv_1_2")
             net = wn.conv2d(net, 128, scope="conv_1_3")
             net = slim.max_pool2d(net, [2, 2], scope='max_pool_1')
-            net = slim.dropout(net, 0.5, scope='dropout_1')
+            net = slim.dropout(net, 1 - dropout_probability, scope='dropout_probability_1')
             assert_shape(net, [None, 16, 16, 128])
 
             net = wn.conv2d(net, 256, scope="conv_2_1")
             net = wn.conv2d(net, 256, scope="conv_2_2")
             net = wn.conv2d(net, 256, scope="conv_2_3")
             net = slim.max_pool2d(net, [2, 2], scope='max_pool_2')
-            net = slim.dropout(net, 0.5, scope='dropout_2')
+            net = slim.dropout(net, 1 - dropout_probability, scope='dropout_probability_2')
             assert_shape(net, [None, 8, 8, 256])
 
             net = wn.conv2d(net, 512, padding='VALID', scope="conv_3_1")
@@ -383,9 +416,20 @@ def tower(inputs,
 
             net = slim.flatten(net)
             assert_shape(net, [None, 128])
-            net = wn.fully_connected(net, 10, init=is_initialization, scope="fully_connected")
-            assert_shape(net, [None, 10])
-            return net
+
+            primary_logits = wn.fully_connected(net, 10, init=is_initialization)
+            secondary_logits = wn.fully_connected(net, 10, init=is_initialization)
+
+            with tf.control_dependencies([tf.assert_greater_equal(num_logits, 1),
+                                          tf.assert_less_equal(num_logits, 2)]):
+                secondary_logits = tf.case([
+                    (tf.equal(num_logits, 1), lambda: primary_logits),
+                    (tf.equal(num_logits, 2), lambda: secondary_logits),
+                ], exclusive=True, default=lambda: primary_logits)
+
+            assert_shape(primary_logits, [None, 10])
+            assert_shape(secondary_logits, [None, 10])
+            return primary_logits, secondary_logits
 
 
 def errors(logits, labels, name=None):
@@ -434,25 +478,76 @@ def classification_costs(logits, labels, name=None):
         return mean, per_sample
 
 
-def consistency_costs(logits1, logits2, cons_coefficient, mask, name=None):
+def consistency_costs(logits1, logits2, cons_coefficient, mask, consistency_trust, name=None):
+    """Takes a softmax of the logits and returns their distance as described below
+
+    Consistency_trust determines the distance metric to use
+    - trust=0: MSE
+    - 0 < trust < 1: a scaled KL-divergence but both sides mixtured with
+      a uniform distribution with given trust used as the mixture weight
+    - trust=1: scaled KL-divergence
+
+    When trust > 0, the cost is scaled to make the gradients
+    the same size as MSE when trust -> 0. The scaling factor used is
+    2 * (1 - 1/num_classes) / num_classes**2 / consistency_trust**2 .
+    To have consistency match the strength of classification, use
+    consistency coefficient = num_classes**2 / (1 - 1/num_classes) / 2
+    which is 55.5555... when num_classes=10.
+
+    Two potential stumbling blokcs:
+    - When trust=0, this gives gradients to both logits, but when trust > 0
+      this gives gradients only towards the first logit.
+      So do not use trust > 0 with the Pi model.
+    - Numerics may be unstable when 0 < trust < 1.
+    """
+
     with tf.name_scope(name, "consistency_costs") as scope:
-        assert_shape(logits1, [None, 10])
-        assert_shape(logits2, [None, 10])
+        num_classes = 10
+        assert_shape(logits1, [None, num_classes])
+        assert_shape(logits2, [None, num_classes])
         assert_shape(cons_coefficient, [])
         softmax1 = tf.nn.softmax(logits1)
         softmax2 = tf.nn.softmax(logits2)
-        costs = tf.reduce_mean((softmax1 - softmax2) ** 2, -1) * cons_coefficient
-        costs = costs * tf.to_float(mask)
+
+        kl_cost_multiplier = 2 * (1 - 1/num_classes) / num_classes**2 / consistency_trust**2
+
+        def pure_mse():
+            costs = tf.reduce_mean((softmax1 - softmax2) ** 2, -1)
+            return costs
+
+        def pure_kl():
+            cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logits=logits1, labels=softmax2)
+            entropy = tf.nn.softmax_cross_entropy_with_logits(logits=logits2, labels=softmax2)
+            costs = cross_entropy - entropy
+            costs = costs * kl_cost_multiplier
+            return costs
+
+        def mixture_kl():
+            with tf.control_dependencies([tf.assert_greater(consistency_trust, 0.0),
+                                          tf.assert_less(consistency_trust, 1.0)]):
+                uniform = tf.constant(1 / num_classes, shape=[num_classes])
+                mixed_softmax1 = consistency_trust * softmax1 + (1 - consistency_trust) * uniform
+                mixed_softmax2 = consistency_trust * softmax2 + (1 - consistency_trust) * uniform
+                costs = tf.reduce_sum(mixed_softmax2 * tf.log(mixed_softmax2 / mixed_softmax1), axis=1)
+                costs = costs * kl_cost_multiplier
+                return costs
+
+        costs = tf.case([
+            (tf.equal(consistency_trust, 0.0), pure_mse),
+            (tf.equal(consistency_trust, 1.0), pure_kl)
+        ], default=mixture_kl)
+
+        costs = costs * tf.to_float(mask) * cons_coefficient
         mean_cost = tf.reduce_mean(costs, name=scope)
         assert_shape(costs, [None])
         assert_shape(mean_cost, [])
         return mean_cost, costs
 
 
-def total_costs(class_costs, cons_costs, name=None):
+def total_costs(*all_costs, name=None):
     with tf.name_scope(name, "total_costs") as scope:
-        assert_shape(class_costs, [None])
-        assert_shape(cons_costs, [None])
-        costs = class_costs + cons_costs
+        for cost in all_costs:
+            assert_shape(cost, [None])
+        costs = tf.reduce_sum(all_costs)
         mean_cost = tf.reduce_mean(costs, name=scope)
         return mean_cost, costs

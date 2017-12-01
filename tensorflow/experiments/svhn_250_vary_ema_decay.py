@@ -1,6 +1,9 @@
-import logging
-from datetime import datetime
+"""Vary ema decay parameter on 250-label SVHN for the NIPS paper"""
 
+import logging
+import sys
+
+from .run_context import RunContext
 import tensorflow as tf
 
 from datasets import SVHN
@@ -8,43 +11,24 @@ from mean_teacher.model import Model
 from mean_teacher import minibatching
 
 
-logging.basicConfig(level=logging.INFO)
 LOG = logging.getLogger('main')
 
 
-def run_all():
-    for run_params in parameters():
-        run(**run_params)
-
-
 def parameters():
-    test_phase = True
-    date = datetime.now()
-    for n_labeled in [250, 500, 1000, 'all']:
-        for n_extra_unlabeled in [0, 100000, 500000]:
-            for model_type in ['mean_teacher', 'pi']:
-                if n_extra_unlabeled > 0 and n_labeled != 500:
-                    continue
-                if n_labeled == 'all':
-                    n_runs = 4
-                else:
-                    n_runs = 10
-                for data_seed in range(2000, 2000 + n_runs):
-                    result_dir = "{root}/{dataset}/{model}/{date:%Y-%m-%d_%H:%M:%S}/{seed}".format(
-                        root='results/final_eval',
-                        dataset='svhn_{}_{}'.format(n_labeled, n_extra_unlabeled),
-                        model=model_type,
-                        date=date,
-                        seed=data_seed
-                    )
-                    yield {
-                        'result_dir': result_dir,
-                        'test_phase': test_phase,
-                        'model_type': model_type,
-                        'n_labeled': n_labeled,
-                        'n_extra_unlabeled': n_extra_unlabeled,
-                        'data_seed': data_seed
-                    }
+    n_runs = 4
+    for data_seed in range(1000, 1000 + n_runs):
+        for ema_decay in [0, 0.9, 0.97, 0.99, 0.997, 0.999, 0.9997, 0.9999]:
+            yield {
+                'data_seed': data_seed,
+                'ema_decay_during_rampup': ema_decay,
+                'ema_decay_after_rampup': ema_decay
+            }
+
+        yield {
+            'data_seed': data_seed,
+            'ema_decay_during_rampup': 0.99,
+            'ema_decay_after_rampup': 0.999,
+        }
 
 
 def model_hyperparameters(model_type, n_labeled, n_extra_unlabeled):
@@ -58,7 +42,7 @@ def model_hyperparameters(model_type, n_labeled, n_extra_unlabeled):
         return {
             'training_length': training_length[n_extra_unlabeled],
             'n_labeled_per_batch': 100,
-            'max_consistency_coefficient': 100.0,
+            'max_consistency_cost': 100.0,
             'apply_consistency_to_labeled': True,
             'ema_consistency': model_type == 'mean_teacher'
         }
@@ -66,7 +50,7 @@ def model_hyperparameters(model_type, n_labeled, n_extra_unlabeled):
         return {
             'training_length': training_length[n_extra_unlabeled],
             'n_labeled_per_batch': 1,
-            'max_consistency_coefficient': 1.0,
+            'max_consistency_cost': 1.0,
             'apply_consistency_to_labeled': False,
             'ema_consistency': model_type == 'mean_teacher'
         }
@@ -75,23 +59,25 @@ def model_hyperparameters(model_type, n_labeled, n_extra_unlabeled):
         assert False, msg.format(locals())
 
 
-def run(result_dir, test_phase, n_labeled, n_extra_unlabeled, data_seed, model_type):
+def run(data_seed, ema_decay_during_rampup, ema_decay_after_rampup,
+        test_phase=False, n_labeled=250, n_extra_unlabeled=0, model_type='mean_teacher'):
     minibatch_size = 100
     hyperparams = model_hyperparameters(model_type, n_labeled, n_extra_unlabeled)
 
     tf.reset_default_graph()
-    model = Model(result_dir=result_dir)
+    model = Model(RunContext(__file__, data_seed))
 
     svhn = SVHN(n_labeled=n_labeled,
                 n_extra_unlabeled=n_extra_unlabeled,
                 data_seed=data_seed,
                 test_phase=test_phase)
 
-    model['rampdown_length'] = 0
     model['ema_consistency'] = hyperparams['ema_consistency']
-    model['max_consistency_coefficient'] = hyperparams['max_consistency_coefficient']
+    model['max_consistency_cost'] = hyperparams['max_consistency_cost']
     model['apply_consistency_to_labeled'] = hyperparams['apply_consistency_to_labeled']
     model['training_length'] = hyperparams['training_length']
+    model['ema_decay_during_rampup'] = ema_decay_during_rampup
+    model['ema_decay_after_rampup'] = ema_decay_after_rampup
 
     training_batches = minibatching.training_batches(svhn.training,
                                                      minibatch_size,
@@ -106,4 +92,5 @@ def run(result_dir, test_phase, n_labeled, n_extra_unlabeled, data_seed, model_t
 
 
 if __name__ == "__main__":
-    run_all()
+    for run_params in parameters():
+        run(**run_params)

@@ -1,6 +1,9 @@
-import logging
-from datetime import datetime
+"""CIFAR-10 final evaluation"""
 
+import logging
+import sys
+
+from experiments.run_context import RunContext
 import tensorflow as tf
 
 from datasets import Cifar10ZCA
@@ -8,34 +11,19 @@ from mean_teacher.model import Model
 from mean_teacher import minibatching
 
 
-logging.basicConfig(level=logging.INFO)
 LOG = logging.getLogger('main')
-
-
-def run_all():
-    for run_params in parameters():
-        run(**run_params)
 
 
 def parameters():
     test_phase = True
-    date = datetime.now()
-    for n_labeled in [4000]:
+    for n_labeled in [1000, 2000, 4000, 'all']:
         for model_type in ['mean_teacher', 'pi']:
             if n_labeled == 'all':
                 n_runs = 4
             else:
                 n_runs = 10
             for data_seed in range(2000, 2000 + n_runs):
-                result_dir = "{root}/{dataset}/{model}/{date:%Y-%m-%d_%H:%M:%S}/{seed}".format(
-                    root='results/final_eval',
-                    dataset='cifar10_{}'.format(n_labeled),
-                    model=model_type,
-                    date=date,
-                    seed=data_seed
-                )
                 yield {
-                    'result_dir': result_dir,
                     'test_phase': test_phase,
                     'model_type': model_type,
                     'n_labeled': n_labeled,
@@ -48,14 +36,14 @@ def model_hyperparameters(model_type, n_labeled):
     if n_labeled == 'all':
         return {
             'n_labeled_per_batch': 100,
-            'max_consistency_coefficient': 100.0,
+            'max_consistency_cost': 100.0,
             'apply_consistency_to_labeled': True,
             'ema_consistency': model_type == 'mean_teacher'
         }
     elif isinstance(n_labeled, int):
         return {
             'n_labeled_per_batch': 'vary',
-            'max_consistency_coefficient': 100.0 * n_labeled / 50000,
+            'max_consistency_cost': 100.0 * n_labeled / 50000,
             'apply_consistency_to_labeled': True,
             'ema_consistency': model_type == 'mean_teacher'
         }
@@ -64,12 +52,12 @@ def model_hyperparameters(model_type, n_labeled):
         assert False, msg.format(locals())
 
 
-def run(result_dir, test_phase, n_labeled, data_seed, model_type):
+def run(test_phase, n_labeled, data_seed, model_type):
     minibatch_size = 100
     hyperparams = model_hyperparameters(model_type, n_labeled)
 
     tf.reset_default_graph()
-    model = Model(result_dir=result_dir)
+    model = Model(RunContext(__file__, data_seed))
 
     cifar = Cifar10ZCA(n_labeled=n_labeled,
                        data_seed=data_seed,
@@ -77,7 +65,7 @@ def run(result_dir, test_phase, n_labeled, data_seed, model_type):
 
     model['flip_horizontally'] = True
     model['ema_consistency'] = hyperparams['ema_consistency']
-    model['max_consistency_coefficient'] = hyperparams['max_consistency_coefficient']
+    model['max_consistency_cost'] = hyperparams['max_consistency_cost']
     model['apply_consistency_to_labeled'] = hyperparams['apply_consistency_to_labeled']
     model['adam_beta_2_during_rampup'] = 0.999
     model['ema_decay_during_rampup'] = 0.999
@@ -98,4 +86,5 @@ def run(result_dir, test_phase, n_labeled, data_seed, model_type):
 
 
 if __name__ == "__main__":
-    run_all()
+    for run_params in parameters():
+        run(**run_params)

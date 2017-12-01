@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime
 
+from experiments.run_context import RunContext
 from datasets import SVHN
 from mean_teacher.model import Model
 from mean_teacher import minibatching
@@ -12,19 +13,10 @@ LOG = logging.getLogger('main')
 
 def run():
     data_seed = 0
-    date = datetime.now()
     n_labeled = 500
     n_extra_unlabeled = 0
 
-    result_dir = "{root}/{dataset}/{model}/{date:%Y-%m-%d_%H:%M:%S}/{seed}".format(
-        root='results/final_eval',
-        dataset='svhn_{}_{}'.format(n_labeled, n_extra_unlabeled),
-        model='mean_teacher',
-        date=date,
-        seed=data_seed
-    )
-
-    model = Model(result_dir=result_dir)
+    model = Model(RunContext(__file__, 0))
     model['rampdown_length'] = 0
     model['training_length'] = 180000
 

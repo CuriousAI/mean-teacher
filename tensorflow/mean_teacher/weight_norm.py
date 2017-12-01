@@ -40,7 +40,6 @@ def fully_connected(inputs, num_outputs,
             return x_init
         else:
             V, g, b = [tf.get_variable(var_name) for var_name in ['V', 'g', 'b']]
-            tf.assert_variables_initialized([V, g, b])
 
             # use weight normalization (Salimans & Kingma, 2016)
             inputs = tf.matmul(inputs, V)
@@ -109,7 +108,6 @@ def conv2d(inputs, num_outputs,
 
         else:
             V, g, b = [tf.get_variable(var_name) for var_name in ['V', 'g', 'b']]
-            tf.assert_variables_initialized([V, g, b])
 
             # use weight normalization (Salimans & Kingma, 2016)
             W = (tf.reshape(g, [1, 1, 1, num_outputs]) *

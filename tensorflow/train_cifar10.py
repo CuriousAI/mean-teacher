@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime
 
+from experiments.run_context import RunContext
 from datasets import Cifar10ZCA
 from mean_teacher.model import Model
 from mean_teacher import minibatching
@@ -12,21 +13,11 @@ LOG = logging.getLogger('main')
 
 def run():
     data_seed = 0
-    date = datetime.now()
     n_labeled = 4000
 
-
-    result_dir = "{root}/{dataset}/{model}/{date:%Y-%m-%d_%H:%M:%S}/{seed}".format(
-        root='results/final_eval',
-        dataset='cifar10_{}'.format(n_labeled),
-        model='mean_teacher',
-        date=date,
-        seed=data_seed
-    )
-
-    model = Model(result_dir=result_dir)
+    model = Model(RunContext(__file__, 0))
     model['flip_horizontally'] = True
-    model['max_consistency_coefficient'] = 100.0 * n_labeled / 50000
+    model['max_consistency_cost'] = 100.0 * n_labeled / 50000
     model['adam_beta_2_during_rampup'] = 0.999
     model['ema_decay_during_rampup'] = 0.999
     model['normalize_input'] = False  # Keep ZCA information
