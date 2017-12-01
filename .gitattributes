@@ -1,0 +1,2 @@
+mean-teacher/pytorch/data-local/bin/link_cifar10_val.sh linguist-generated=true
+mean-teacher/pytorch/data-local/bin/link_cifar10_train.sh linguist-generated=true
