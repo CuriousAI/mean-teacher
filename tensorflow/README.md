@@ -1,13 +1,6 @@
 # Mean teacher
 
-This is the source code for the ICLR 2017 workshop paper "Mean teachers are better role models: Weight-averaged consistency targets improve semi-supervised deep learning results".
-
-- [Paper in Arxiv](https://arxiv.org/abs/1703.01780)
-- [ICLR 2017 workshop poster](ICLR_2017_poster.pdf)
-
-## Usage
-
-The code runs on Python 3. Install the dependencies and prepare the datasets with the following commands:
+This is the TensorFlow source code for the Mean Teacher paper. The code runs on Python 3. Install the dependencies and prepare the datasets with the following commands:
 
 ```
 pip install tensorflow==1.2.1 numpy scipy
