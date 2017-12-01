@@ -1,11 +1,8 @@
 # Mean teachers are better role models
-#### Weight-averaged consistency targets improve semi-supervised deep learning results
 
 [Paper](https://arxiv.org/abs/1703.01780) ---- [NIPS 2017 poster](nips_2017_poster.pdf) ---- [NIPS 2017 spotlight slides](nips_2017_slides.pdf)
 
-By Antti Tarvainen, Harri Valpola
-
-[The Curious AI Company](https://thecuriousaicompany.com/)
+By Antti Tarvainen, Harri Valpola ([The Curious AI Company](https://thecuriousaicompany.com/))
 
 ## Approach
 
