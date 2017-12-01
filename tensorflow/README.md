@@ -1,4 +1,4 @@
-# Mean teacher TensorFlow source code
+# Mean Teacher using TensorFlow
 
 This is the TensorFlow source code for the Mean Teacher paper. The code runs on Python 3. Install the dependencies and prepare the datasets with the following commands:
 

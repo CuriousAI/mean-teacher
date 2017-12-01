@@ -35,5 +35,11 @@ All labels, state of the art [\[paper\]](https://arxiv.org/abs/1705.07485) | 2.8
 
 ## Implementation
 
-See tensorflow directory for the TensorFlow implementation and instructions on how to use it.
-PyTorch implementation coming up!
+There are two implementations, one for TensorFlow and one for PyTorch.
+The PyTorch version is probably easier to adapt to your needs,
+since it follows typical PyTorch idioms, and there's a natural place to
+add your model and dataset. Let me know if anything needs clarification.
+
+Regarding the results in the paper, the experiments using a traditional
+CNN architecture were run with the TensorFlow version.
+The experiments using residual networks were run with the PyTorch version.
