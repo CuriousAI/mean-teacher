@@ -41,5 +41,20 @@ since it follows typical PyTorch idioms, and there's a natural place to
 add your model and dataset. Let me know if anything needs clarification.
 
 Regarding the results in the paper, the experiments using a traditional
-CNN architecture were run with the TensorFlow version.
+ConvNet architecture were run with the TensorFlow version.
 The experiments using residual networks were run with the PyTorch version.
+
+
+## Tips for choosing hyperparameters and other tuning
+
+Mean Teacher introduces two new hyperparameters: EMA decay rate and consistency cost weight. The optimal value for each of these depends on the dataset, the model, and the composition of the minibatches. You will also need to choose how to interleave unlabeled samples and labeled samples in minibatches.
+
+Here are some rules of thumb to get you started:
+
+* If you are working on a new dataset, it may be easiest to start with only labeled data and do pure supervised training. Then when you are happy with the architecture and hyperparameters, add mean teacher. The same network should work well, although you may want to tune down regularization such as weight decay that you have used with small data.
+* Mean Teacher needs some noise in the model to work optimally. In practice, the best noise is probably random input augmentations. Use whatever relevant augmentations you can think of: the algorithm will train the model to be invariant to them.
+* It's useful to dedicate a portion of each minibatch for labeled examples. Then the supervised training signal is strong enough early on to train quickly and prevent getting stuck into uncertainty. In the PyTorch examples we have a quarter or a half of the minibatch for the labeled examples and the rest for the unlabeled. (See [TwoStreamBatchSampler](pytorch/mean_teacher/data.py#L98) in Pytorch code.)
+* For EMA decay rate 0.999 seems to be a good starting point.
+* You can use either MSE or KL-divergence as the consistency cost function. For KL-divergence, a good consistency cost weight is often between 1.0 and 10.0. For MSE, it seems to be between the number of classes and the number of classes squared. On small datasets we saw MSE getting better results, but KL always worked pretty well too.
+* It may help to ramp up the consistency cost in the beginning over the first few epochs until the teacher network starts giving good predictions. 
+* An additional trick we used in the PyTorch examples: Have two seperate logit layers at the top level. Use one for classification of labeled examples and one for predicting the teacher output. And then have an additional cost between the logits of these two predictions. The intent is the same as with the consistency cost rampup: in the beginning the teacher output may be wrong, so loosen the link between the classification prediction and the consistency cost. (See the [--logit-distance-cost](https://github.com/CuriousAI/mean-teacher/blob/master/pytorch/mean_teacher/cli.py#L65-L66) argument in the PyTorch implementation.)
