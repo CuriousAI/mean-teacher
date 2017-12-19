@@ -1,6 +1,6 @@
 # Mean teachers are better role models
 
-[Paper](https://arxiv.org/abs/1703.01780) ---- [NIPS 2017 poster](nips_2017_poster.pdf) ---- [NIPS 2017 spotlight slides](nips_2017_slides.pdf)
+[Paper](https://arxiv.org/abs/1703.01780) ---- [NIPS 2017 poster](nips_2017_poster.pdf) ---- [NIPS 2017 spotlight slides](nips_2017_slides.pdf) ---- [Blog post](https://thecuriousaicompany.com/mean-teacher/)
 
 By Antti Tarvainen, Harri Valpola ([The Curious AI Company](https://thecuriousaicompany.com/))
 
