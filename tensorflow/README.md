@@ -7,6 +7,8 @@ pip install tensorflow==1.2.1 numpy scipy pandas
 ./prepare_data.sh
 ```
 
+Note that TensorFlow versions >= 1.3 do not work at the moment ([pull requests welcome](../../issues/1)).
+
 To train the model, run:
 
 * `python train_svhn.py` to train on SVHN using 500 labels
