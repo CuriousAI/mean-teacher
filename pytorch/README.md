@@ -13,7 +13,7 @@ The code expects to find the data in specific directories inside the data-local 
 ./data-local/bin/prepare_cifar10.sh
 ```
 
-(ImageNet instructions coming up.)
+You can prepare the ImageNet using [these instructions](https://github.com/facebook/fb.resnet.torch/blob/master/INSTALL.md#download-the-imagenet-dataset) (Section "Download the ImageNet dataset"). The mean teacher code expects to find the ImageNet data at `data-local/images/ilsvrc2012/`.
 
 To train on CIFAR-10, run e.g.:
 
