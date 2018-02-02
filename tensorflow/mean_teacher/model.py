@@ -134,6 +134,7 @@ class Model:
             self.mean_cons_cost_mt, self.cons_costs_mt = consistency_costs(
                 self.cons_logits_1, self.class_logits_ema, self.cons_coefficient, consistency_mask, self.hyper['consistency_trust'])
 
+
             def l2_norms(matrix):
                 l2s = tf.reduce_sum(matrix ** 2, axis=1)
                 mean_l2 = tf.reduce_mean(l2s)
@@ -150,6 +151,8 @@ class Model:
                 self.class_costs_1, self.cons_costs_pi, self.res_costs_1)
             self.mean_total_cost_mt, self.total_costs_mt = total_costs(
                 self.class_costs_1, self.cons_costs_mt, self.res_costs_1)
+            assert_shape(self.total_costs_pi, [3])
+            assert_shape(self.total_costs_mt, [3])
 
             self.cost_to_be_minimized = tf.cond(self.hyper['ema_consistency'],
                                                 lambda: self.mean_total_cost_mt,
@@ -548,6 +551,6 @@ def total_costs(*all_costs, name=None):
     with tf.name_scope(name, "total_costs") as scope:
         for cost in all_costs:
             assert_shape(cost, [None])
-        costs = tf.reduce_sum(all_costs)
+        costs = tf.reduce_sum(all_costs, axis=1)
         mean_cost = tf.reduce_mean(costs, name=scope)
         return mean_cost, costs
