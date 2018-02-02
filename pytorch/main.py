@@ -244,9 +244,6 @@ def train(train_loader, model, ema_model, optimizer, epoch, log):
             class_logit, cons_logit = logit1, logit1
             res_loss = 0
 
-        class_softmax, cons_softmax = F.softmax(class_logit, dim=1), F.softmax(cons_logit, dim=1)
-        ema_softmax = F.softmax(ema_logit, dim=1)
-
         class_loss = class_criterion(class_logit, target_var) / minibatch_size
         meters.update('class_loss', class_loss.data[0])
 
