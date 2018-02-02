@@ -9,6 +9,12 @@ https://github.com/openai/pixel-cnn/blob/fc86dbce1d508fa79f8e9a7d1942d229249a536
 import tensorflow as tf
 from tensorflow.contrib.framework.python.ops import add_arg_scope
 
+from tensorflow.python.ops import variables
+def passthrough(obj, value): return value
+try:
+  variables.Variable._build_initializer_expr=passthrough
+except: # older versions of TF don't have this
+  pass
 
 @add_arg_scope
 def fully_connected(inputs, num_outputs,
