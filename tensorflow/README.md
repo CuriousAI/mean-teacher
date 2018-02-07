@@ -14,5 +14,8 @@ To train the model, run:
 * `python train_svhn.py` to train on SVHN using 500 labels
 * `python train_cifar10.py` to train on CIFAR-10 using 4000 labels
 
+These runners converge fairly quickly and produce a fair accuracy.
+
 To reproduce the experiments in the paper run: `python -m experiments.cifar10_final_eval` or similar.
-See the experiments directory for all the experiments.
+They use different hyperparameters, and each of the runs takes roughly four times as long to converge as the example runners above.
+See the experiments directory for the complete set of experiments.
