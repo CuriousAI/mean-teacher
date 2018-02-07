@@ -7,7 +7,7 @@ pip install tensorflow==1.2.1 numpy scipy pandas
 ./prepare_data.sh
 ```
 
-Note that TensorFlow versions >= 1.3 do not work at the moment ([pull requests welcome](../../../issues/1)).
+Note that TensorFlow versions >= 1.3 have [a bug](https://github.com/tensorflow/tensorflow/issues/13351) that causes the code to hang up in the beginning. If you want to provide a workaround, [pull requests are welcome](../../../issues/1).
 
 To train the model, run:
 
