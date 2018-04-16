@@ -3,7 +3,7 @@
 This is the PyTorch source code for the Mean Teacher paper. The code runs on Python 3. Install the dependencies and prepare the datasets with the following commands:
 
 ```
-pip install numpy scipy pandas pytorch
+pip install numpy scipy pandas pytorch tqdm matplotlib
 pip install git+ssh://git@github.com/pytorch/vision@c31c3d7e0e68e871d2128c8b731698ed3b11b119
 ```
 
