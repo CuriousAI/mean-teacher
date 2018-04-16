@@ -56,10 +56,12 @@ def parameters():
                 'data_seed': data_seed
             }
 
-
 def run(title, base_batch_size, base_labeled_batch_size, base_lr, n_labels, data_seed, **kwargs):
-    LOG.info('run title: %s', title)
+    LOG.info('run title: %s, data seed: %d', title, data_seed)
+
     ngpu = torch.cuda.device_count()
+    assert ngpu > 0, "Expecting at least one GPU, found none."
+
     adapted_args = {
         'batch_size': base_batch_size * ngpu,
         'labeled_batch_size': base_labeled_batch_size * ngpu,
