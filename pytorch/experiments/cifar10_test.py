@@ -30,7 +30,6 @@ def parameters():
 
         # Architecture
         'arch': 'cifar_shakeshake26',
-        'ema_decay': 0.97,
 
         # Costs
         'consistency_type': 'mse',
@@ -40,26 +39,42 @@ def parameters():
         'weight_decay': 2e-4,
 
         # Optimization
-        'epochs': 180,
         'lr_rampup': 0,
         'base_lr': 0.05,
-        'lr_rampdown_epochs': 210,
         'nesterov': True,
     }
 
-    for n_labels in [1000, 4000]:
-        for data_seed in range(10, 20):
-            yield {
-                **defaults,
-                'title': '{}-label cifar-10'.format(n_labels),
-                'n_labels': n_labels,
-                'data_seed': data_seed
-            }
+    # 4000 labels:
+    for data_seed in range(10, 20):
+        yield {
+            **defaults,
+            'title': '4000-label cifar-10',
+            'n_labels': 4000,
+            'data_seed': data_seed,
+            'epochs': 300,
+            'lr_rampdown_epochs': 350,
+            'ema_decay': 0.99,
+        }
+
+    # 1000 labels:
+    for data_seed in range(10, 20):
+        yield {
+            **defaults,
+            'title': '1000-label cifar-10',
+            'n_labels': 1000,
+            'data_seed': data_seed,
+            'epochs': 180,
+            'lr_rampdown_epochs': 210,
+            'ema_decay': 0.97,
+        }
 
 
 def run(title, base_batch_size, base_labeled_batch_size, base_lr, n_labels, data_seed, **kwargs):
-    LOG.info('run title: %s', title)
+    LOG.info('run title: %s, data seed: %d', title, data_seed)
+
     ngpu = torch.cuda.device_count()
+    assert ngpu > 0, "Expecting at least one GPU, found none."
+
     adapted_args = {
         'batch_size': base_batch_size * ngpu,
         'labeled_batch_size': base_labeled_batch_size * ngpu,
