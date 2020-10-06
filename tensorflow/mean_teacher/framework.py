@@ -83,7 +83,7 @@ def ema_variable_scope(name_scope_name, var_scope, decay=0.999):
         tf.add_to_collection(tf.GraphKeys.UPDATE_OPS, update_op)
 
     def use_ema_variables(getter, name, *_, **__):
-        #pylint: disable=unused-argument
+
         assert name in original_trainable_vars, "Unknown variable {}.".format(name)
         return ema.average(original_trainable_vars[name])
 

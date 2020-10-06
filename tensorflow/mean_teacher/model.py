@@ -67,7 +67,7 @@ class Model:
         'evaluation_span': 500,
     }
 
-    #pylint: disable=too-many-instance-attributes
+  
     def __init__(self, run_context=None):
         if run_context is not None:
             self.training_log = run_context.create_train_log('training')
@@ -382,7 +382,7 @@ def tower(inputs,
         with \
         slim.arg_scope([wn.conv2d], **default_conv_args), \
         slim.arg_scope(training_mode_funcs, **training_args):
-            #pylint: disable=no-value-for-parameter
+          
             net = inputs
             assert_shape(net, [None, 32, 32, 3])
 
